@@ -11,6 +11,7 @@
 #include "mpu6050.h"
 
 #include <Fusion.h>
+#define SAMPLE_PERIOD 0.01f
 
 const int MPU_ADDRESS = 0x68;
 const int I2C_SDA_GPIO = 4;
@@ -58,6 +59,14 @@ static void mpu6050_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) {
     *temp = buffer[0] << 8 | buffer[1];
 }
 
+// void send_uart_datagram(int val_x, int val_y) {
+//     // uint8_t val1 = (value >> 8) & 0xFF; 
+//     // uint8_t val0 = value & 0xFF; 
+//     // uint8_t eop = 0xFF;
+//     putchar_raw(val_x);     
+//     putchar_raw(val_y); 
+// }
+
 void mpu6050_task(void *p) {
     i2c_init(i2c_default, 400 * 1000);
     gpio_set_function(I2C_SDA_GPIO, GPIO_FUNC_I2C);
@@ -67,26 +76,42 @@ void mpu6050_task(void *p) {
 
     mpu6050_reset();
     int16_t acceleration[3], gyro[3], temp;
+    FusionAhrs ahrs;
+    FusionAhrsInitialise(&ahrs);
 
     while(1) {
         mpu6050_read_raw(acceleration, gyro, &temp);
-        printf("Acc. X = %d, Y = %d, Z = %d\n", acceleration[0], acceleration[1], acceleration[2]);
-        printf("Gyro. X = %d, Y = %d, Z = %d\n", gyro[0], gyro[1], gyro[2]);
-        printf("Temp. = %f\n", (temp / 340.0) + 36.53);
+        FusionVector gyroscope = {
+            .axis.x = gyro[0] / 131.0f, // Conversão para graus/s
+            .axis.y = gyro[1] / 131.0f,
+            .axis.z = gyro[2] / 131.0f,
+        };
+
+        FusionVector accelerometer = {
+            .axis.x = acceleration[0] / 16384.0f, // Conversão para g
+            .axis.y = acceleration[1] / 16384.0f,
+            .axis.z = acceleration[2] / 16384.0f,
+        };      
+
+        FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, SAMPLE_PERIOD);
+
+        const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
+
+        printf("%d,%d,%d\n", (int)euler.angle.roll, (int)euler.angle.pitch, (int)euler.angle.yaw);
+        // printf("Acc. X = %d, Y = %d, Z = %d\n", acceleration[0], acceleration[1], acceleration[2]);
+        // printf("Gyro. X = %d, Y = %d, Z = %d\n", gyro[0], gyro[1], gyro[2]);
+        //printf("Temp. = %f\n", (temp / 340.0) + 36.53);
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-
-
 }
 
 int main() {
     stdio_init_all();
 
-    xTaskCreate(mpu6050_task, "mpu6050_Task 1", 8192, NULL, 1, NULL);
+    xTaskCreate(mpu6050_task, "mpu6050_Task 1", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
-    while (true)
-        ;
+    while (true);
 }
