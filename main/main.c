@@ -97,7 +97,12 @@ void mpu6050_task(void *p) {
 
         const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
 
-        printf("%d,%d,%d\n", (int)euler.angle.roll, (int)euler.angle.pitch, (int)euler.angle.yaw);
+        if (accelerometer.axis.y >= 0.3 || accelerometer.axis.x >= 0.3)  {
+            if (accelerometer.axis.x >= 0.3) accelerometer.axis.x = 10;
+            printf("%d,%d,%d,%d\n", 0, 0, 0,(int)accelerometer.axis.x);
+        } else {
+            printf("%d,%d,%d,%d\n", (int)euler.angle.roll, (int)euler.angle.pitch, (int)euler.angle.yaw, (int)accelerometer.axis.z);
+        }
         // printf("Acc. X = %d, Y = %d, Z = %d\n", acceleration[0], acceleration[1], acceleration[2]);
         // printf("Gyro. X = %d, Y = %d, Z = %d\n", gyro[0], gyro[1], gyro[2]);
         //printf("Temp. = %f\n", (temp / 340.0) + 36.53);
